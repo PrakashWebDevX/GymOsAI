@@ -1,0 +1,19 @@
+.page { animation: fadeIn 0.4s ease; }
+.header { margin-bottom: 2rem; }
+.header h1 { font-size: clamp(1.5rem, 3vw, 2rem); margin: 0; color: var(--color-text); }
+.header p { color: var(--color-text-muted); margin: 0.5rem 0 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; }
+.form { display: flex; flex-direction: column; gap: 1.25rem; }
+.field label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; color: var(--color-text); }
+.field select, .field input[type="range"] { width: 100%; }
+.field select { padding: 0.625rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); font-family: inherit; }
+.macros { display: flex; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: var(--color-bg); border-radius: var(--radius-md); }
+.macros span { font-size: 0.875rem; font-weight: 600; color: var(--color-primary); }
+.meal { padding: 1rem 0; border-bottom: 1px solid var(--color-border); }
+.mealHeader { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+.mealType { font-size: 0.75rem; text-transform: uppercase; color: var(--color-primary); font-weight: 600; }
+.calories { font-size: 0.8125rem; color: var(--color-text-muted); }
+.meal h4 { margin: 0; color: var(--color-text); }
+.ingredients { font-size: 0.8125rem; color: var(--color-text-muted); margin: 0.25rem 0 0; }
+.empty { color: var(--color-text-muted); text-align: center; padding: 2rem; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

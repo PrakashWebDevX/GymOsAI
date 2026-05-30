@@ -1,0 +1,36 @@
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  transition: box-shadow var(--transition);
+}
+
+.card-hover:hover { box-shadow: var(--shadow-md); }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.card-title { font-size: 1.125rem; font-weight: 600; }
+.card-subtitle { font-size: 0.875rem; color: var(--color-text-secondary); }
+
+.card-stat {
+  text-align: center;
+  padding: 1rem;
+}
+
+.card-stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-primary-light);
+}
+
+.card-stat-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
