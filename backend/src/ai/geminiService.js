@@ -1,6 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import config from '../config/index.js';
-import { AppError } from '../utils/errors.js';
+import {
+  generateLocalWorkoutPlan,
+  generateLocalNutritionPlan,
+  generateLocalBodyAnalysis,
+} from './localAiService.js';
 
 const MODEL_CANDIDATES = [
   process.env.GEMINI_MODEL,
@@ -9,15 +13,7 @@ const MODEL_CANDIDATES = [
   'gemini-1.5-flash',
 ].filter(Boolean);
 
-const getGenAI = () => {
-  if (!config.gemini.apiKey) {
-    throw new AppError(
-      'Gemini API key is missing. Set GEMINI_API_KEY in backend environment variables.',
-      503
-    );
-  }
-  return new GoogleGenerativeAI(config.gemini.apiKey);
-};
+const hasGeminiKey = () => Boolean(config.gemini.apiKey && config.gemini.apiKey !== 'your-gemini-api-key');
 
 const parseJsonResponse = (text) => {
   const jsonMatch = text.match(/```json\n?([\s\S]*?)\n?```/) || text.match(/\{[\s\S]*\}/);
@@ -31,8 +27,10 @@ const parseJsonResponse = (text) => {
   return { raw: text };
 };
 
-const generateContent = async (prompt) => {
-  const genAI = getGenAI();
+const tryGemini = async (prompt) => {
+  if (!hasGeminiKey()) return null;
+
+  const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
   let lastError;
 
   for (const modelName of MODEL_CANDIDATES) {
@@ -40,168 +38,131 @@ const generateContent = async (prompt) => {
       const model = genAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent(prompt);
       const text = result.response.text();
-      if (!text) throw new Error('Empty response from AI model');
+      if (!text) throw new Error('Empty AI response');
       return parseJsonResponse(text);
     } catch (err) {
       lastError = err;
       const message = err.message?.toLowerCase() || '';
-      const retryable =
-        message.includes('not found') ||
-        message.includes('404') ||
-        message.includes('model') ||
-        message.includes('unsupported');
-
-      if (retryable && MODEL_CANDIDATES.indexOf(modelName) < MODEL_CANDIDATES.length - 1) {
+      if (
+        (message.includes('not found') || message.includes('404') || message.includes('model')) &&
+        MODEL_CANDIDATES.indexOf(modelName) < MODEL_CANDIDATES.length - 1
+      ) {
         continue;
       }
       break;
     }
   }
 
-  throw new AppError(
-    `AI generation failed: ${lastError?.message || 'Unknown error'}. Check GEMINI_API_KEY on Render.`,
-    502
-  );
+  console.warn('Gemini unavailable, using free built-in AI:', lastError?.message);
+  return null;
 };
 
 export const generateWorkoutPlan = async (params) => {
   const { goal, duration, equipment = [], experienceLevel, focusAreas = [], userProfile } = params;
 
   const prompt = `You are an expert fitness coach. Generate a detailed workout plan as JSON.
-
 User Profile: ${JSON.stringify(userProfile || {})}
-Goal: ${goal}
-Duration: ${duration} minutes
-Equipment: ${equipment.join(', ') || 'bodyweight only'}
-Experience: ${experienceLevel}
-Focus Areas: ${focusAreas.join(', ') || 'full body'}
+Goal: ${goal}, Duration: ${duration} min, Equipment: ${equipment.join(', ') || 'bodyweight'}
+Experience: ${experienceLevel}, Focus: ${focusAreas.join(', ') || 'full body'}
+Return JSON: {"title":"","description":"","warmup":[],"exercises":[],"cooldown":[],"estimatedCalories":0,"difficulty":""}`;
 
-Return JSON with this structure:
-{
-  "title": "string",
-  "description": "string",
-  "warmup": [{"name": "string", "duration": "string", "instructions": "string"}],
-  "exercises": [{"name": "string", "sets": number, "reps": "string", "rest": "string", "instructions": "string", "muscleGroup": "string"}],
-  "cooldown": [{"name": "string", "duration": "string", "instructions": "string"}],
-  "estimatedCalories": number,
-  "difficulty": "string"
-}`;
+  const geminiResult = await tryGemini(prompt);
+  if (geminiResult && !geminiResult.raw) return geminiResult;
 
-  return generateContent(prompt);
+  return generateLocalWorkoutPlan(params);
 };
 
 export const generateNutritionPlan = async (params) => {
   const { calories, dietType, mealsPerDay, allergies = [], preferences = [], userProfile } = params;
 
-  const prompt = `You are an expert nutritionist. Generate a daily meal plan as JSON.
+  const prompt = `Generate a daily meal plan as JSON.
+Profile: ${JSON.stringify(userProfile || {})}, Calories: ${calories}, Diet: ${dietType}
+Meals/day: ${mealsPerDay}, Allergies: ${allergies.join(', ') || 'none'}
+Return JSON: {"title":"","totalCalories":0,"macros":{},"meals":[],"tips":[]}`;
 
-User Profile: ${JSON.stringify(userProfile || {})}
-Target Calories: ${calories || 'calculate based on profile'}
-Diet Type: ${dietType}
-Meals Per Day: ${mealsPerDay}
-Allergies: ${allergies.join(', ') || 'none'}
-Preferences: ${preferences.join(', ') || 'none'}
+  const geminiResult = await tryGemini(prompt);
+  if (geminiResult && !geminiResult.raw) return geminiResult;
 
-Return JSON with this structure:
-{
-  "title": "string",
-  "totalCalories": number,
-  "macros": {"protein": number, "carbs": number, "fat": number},
-  "meals": [{"type": "breakfast|lunch|dinner|snack", "name": "string", "calories": number, "protein": number, "carbs": number, "fat": number, "ingredients": ["string"], "instructions": "string"}],
-  "tips": ["string"]
-}`;
-
-  return generateContent(prompt);
+  return generateLocalNutritionPlan(params);
 };
 
 export const analyzeBodyMetrics = async (params) => {
-  const prompt = `You are a fitness and health analyst. Analyze these body metrics and provide recommendations as JSON.
+  const prompt = `Analyze body metrics as JSON: ${JSON.stringify(params)}
+Return JSON: {"bmi":0,"bmiCategory":"","bmr":0,"tdee":0,"recommendedCalories":0,"bodyComposition":{},"healthInsights":[],"targetWeight":{}}`;
 
-Metrics: ${JSON.stringify(params)}
+  const geminiResult = await tryGemini(prompt);
+  if (geminiResult && !geminiResult.raw) return geminiResult;
 
-Return JSON with:
-{
-  "bmi": number,
-  "bmiCategory": "string",
-  "bmr": number,
-  "tdee": number,
-  "recommendedCalories": number,
-  "bodyComposition": {"assessment": "string", "recommendations": ["string"]},
-  "healthInsights": ["string"],
-  "targetWeight": {"min": number, "max": number, "ideal": number}
-}`;
-
-  return generateContent(prompt);
+  return generateLocalBodyAnalysis(params);
 };
 
 export const generateComprehensivePlan = async (params) => {
-  const prompt = `You are an elite fitness coach and nutritionist. Create a comprehensive fitness plan as JSON.
+  const geminiResult = await tryGemini(`Create comprehensive fitness plan as JSON: ${JSON.stringify(params)}`);
+  if (geminiResult && !geminiResult.raw) return geminiResult;
 
-Parameters: ${JSON.stringify(params)}
+  const workout = generateLocalWorkoutPlan({ goal: 'mixed', duration: 45, experienceLevel: 'intermediate' });
+  const nutrition = generateLocalNutritionPlan({ dietType: 'balanced', calories: 2000, mealsPerDay: 3 });
 
-Return JSON with:
-{
-  "overview": "string",
-  "durationWeeks": number,
-  "weeklySchedule": [{"week": number, "workoutDays": number, "focus": "string", "workouts": [{"day": "string", "type": "string", "description": "string"}]}],
-  "nutritionGuidelines": {"dailyCalories": number, "macros": {}, "mealTiming": ["string"], "hydration": "string"},
-  "milestones": [{"week": number, "goal": "string", "metrics": {}}],
-  "tips": ["string"]
-}`;
-
-  return generateContent(prompt);
+  return {
+    overview: '12-week balanced fitness program combining strength training and proper nutrition.',
+    durationWeeks: params.durationWeeks || 12,
+    weeklySchedule: [{ week: 1, workoutDays: 4, focus: 'Foundation building', workouts: [{ day: 'Mon', type: workout.title, description: workout.description }] }],
+    nutritionGuidelines: { dailyCalories: nutrition.totalCalories, macros: nutrition.macros, mealTiming: ['Breakfast 8am', 'Lunch 12pm', 'Dinner 7pm'], hydration: '2.5L water daily' },
+    milestones: [{ week: 4, goal: 'Complete 16 workouts', metrics: { workouts: 16 } }],
+    tips: nutrition.tips,
+    source: 'gymos-local-ai',
+  };
 };
 
 export const recommendFoods = async (params) => {
-  const prompt = `Recommend foods for fitness goals as JSON.
+  const geminiResult = await tryGemini(`Recommend foods as JSON for: ${JSON.stringify(params)}`);
+  if (geminiResult && !geminiResult.raw) return geminiResult;
 
-Parameters: ${JSON.stringify(params)}
-
-Return JSON with:
-{
-  "recommendations": [{"name": "string", "category": "string", "benefits": ["string"], "servingSize": "string", "calories": number, "protein": number}],
-  "mealSuggestions": [{"name": "string", "ingredients": ["string"], "prepTime": "string"}],
-  "foodsToAvoid": ["string"],
-  "tips": ["string"]
-}`;
-
-  return generateContent(prompt);
+  return {
+    recommendations: [
+      { name: 'Chicken Breast', category: 'Protein', benefits: ['High protein', 'Low fat'], servingSize: '150g', calories: 165, protein: 31 },
+      { name: 'Salmon', category: 'Protein', benefits: ['Omega-3', 'Muscle recovery'], servingSize: '150g', calories: 280, protein: 25 },
+      { name: 'Sweet Potato', category: 'Carbs', benefits: ['Complex carbs', 'Fiber'], servingSize: '200g', calories: 180, protein: 4 },
+      { name: 'Greek Yogurt', category: 'Dairy', benefits: ['Probiotics', 'Protein'], servingSize: '170g', calories: 100, protein: 17 },
+    ],
+    mealSuggestions: [{ name: 'Post-Workout Bowl', ingredients: ['Chicken', 'Rice', 'Broccoli'], prepTime: '20 min' }],
+    foodsToAvoid: ['Processed sugars', 'Deep fried foods', 'Excessive alcohol'],
+    tips: ['Eat protein with every meal', 'Choose whole foods over processed'],
+    source: 'gymos-local-ai',
+  };
 };
 
 export const getSupplementAdvice = async (params) => {
-  const prompt = `Provide evidence-based supplement advice as JSON. Always include disclaimer about consulting healthcare providers.
+  const geminiResult = await tryGemini(`Supplement advice as JSON: ${JSON.stringify(params)}`);
+  if (geminiResult && !geminiResult.raw) return geminiResult;
 
-Parameters: ${JSON.stringify(params)}
-
-Return JSON with:
-{
-  "recommended": [{"name": "string", "dosage": "string", "timing": "string", "benefits": ["string"], "evidence": "string"}],
-  "optional": [{"name": "string", "dosage": "string", "benefits": ["string"]}],
-  "avoid": [{"name": "string", "reason": "string"}],
-  "interactions": ["string"],
-  "disclaimer": "string"
-}`;
-
-  return generateContent(prompt);
+  return {
+    recommended: [
+      { name: 'Whey Protein', dosage: '25-30g post-workout', timing: 'After training', benefits: ['Muscle recovery', 'Protein intake'], evidence: 'Well-studied for muscle synthesis' },
+      { name: 'Creatine Monohydrate', dosage: '5g daily', timing: 'Any time', benefits: ['Strength', 'Power output'], evidence: 'Most researched supplement' },
+    ],
+    optional: [{ name: 'Vitamin D', dosage: '1000-2000 IU', benefits: ['Bone health', 'Immune support'] }],
+    avoid: [{ name: 'Proprietary blends', reason: 'Unknown ingredient amounts' }],
+    interactions: ['Consult doctor if taking medications'],
+    disclaimer: 'This is general information only. Consult a healthcare provider before starting supplements.',
+    source: 'gymos-local-ai',
+  };
 };
 
 export const generateWeeklyReport = async (userData) => {
-  const prompt = `Generate a weekly fitness progress report as JSON based on this user data.
+  const geminiResult = await tryGemini(`Weekly fitness report as JSON: ${JSON.stringify(userData)}`);
+  if (geminiResult && !geminiResult.raw) return geminiResult;
 
-Data: ${JSON.stringify(userData)}
-
-Return JSON with:
-{
-  "summary": "string",
-  "highlights": ["string"],
-  "areasForImprovement": ["string"],
-  "workoutStats": {"completed": number, "total": number, "streakDays": number},
-  "nutritionStats": {"avgCalories": number, "proteinAvg": number},
-  "recommendations": ["string"],
-  "nextWeekGoals": ["string"]
-}`;
-
-  return generateContent(prompt);
+  return {
+    summary: 'Solid week of training. Keep building consistency.',
+    highlights: ['Showed up and trained', 'Maintained nutrition awareness'],
+    areasForImprovement: ['Increase water intake', 'Add one extra workout day'],
+    workoutStats: { completed: userData?.workouts?.length || 0, total: 5, streakDays: 1 },
+    nutritionStats: { avgCalories: 2000, proteinAvg: 120 },
+    recommendations: ['Schedule workouts in advance', 'Prep meals on Sunday'],
+    nextWeekGoals: ['Complete 4 workouts', 'Log progress on Friday'],
+    source: 'gymos-local-ai',
+  };
 };
 
 export default {

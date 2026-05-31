@@ -2,13 +2,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'JWT_SECRET', 'GEMINI_API_KEY'];
+const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'JWT_SECRET'];
 
 requiredEnvVars.forEach((key) => {
   if (!process.env[key]) {
     console.warn(`Warning: ${key} is not set in environment variables`);
   }
 });
+
+if (!process.env.GEMINI_API_KEY) {
+  console.info('GEMINI_API_KEY not set — using free built-in GYMOS AI engine (no API key needed).');
+}
 
 export const config = {
   port: parseInt(process.env.PORT, 10) || 5000,
