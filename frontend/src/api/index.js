@@ -14,22 +14,22 @@ export const profileApi = {
 };
 
 export const workoutApi = {
-  generate: (data) => api.post('/workout/generate', data),
+  generate: (data) => api.post('/workout/generate', data, { timeout: 120000 }),
   getHistory: (limit) => api.get('/workout/history', { params: { limit } }),
   update: (data) => api.put('/workout/update', data),
 };
 
 export const nutritionApi = {
-  generate: (data) => api.post('/nutrition/generate', data),
+  generate: (data) => api.post('/nutrition/generate', data, { timeout: 120000 }),
   getHistory: (limit) => api.get('/nutrition/history', { params: { limit } }),
   getMealPlan: () => api.get('/nutrition/meal-plan'),
 };
 
 export const aiApi = {
-  analyzeBody: (data) => api.post('/ai/analyze-body', data),
-  generatePlan: (data) => api.post('/ai/generate-plan', data),
-  recommendFoods: (data) => api.post('/ai/recommend-foods', data),
-  supplementAdvice: (data) => api.post('/ai/supplement-advice', data),
+  analyzeBody: (data) => api.post('/ai/analyze-body', data, { timeout: 120000 }),
+  generatePlan: (data) => api.post('/ai/generate-plan', data, { timeout: 120000 }),
+  recommendFoods: (data) => api.post('/ai/recommend-foods', data, { timeout: 120000 }),
+  supplementAdvice: (data) => api.post('/ai/supplement-advice', data, { timeout: 120000 }),
 };
 
 export const progressApi = {

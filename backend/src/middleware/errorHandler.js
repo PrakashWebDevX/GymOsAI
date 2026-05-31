@@ -5,8 +5,8 @@ export const errorHandler = (err, _req, res, _next) => {
   const statusCode = err.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
   const message = err.isOperational ? err.message : ERROR_MESSAGES.INTERNAL_ERROR;
 
-  if (process.env.NODE_ENV === 'development') {
-    console.error('Error:', err);
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production') {
+    console.error('Error:', err.message || err);
   }
 
   res.status(statusCode).json({

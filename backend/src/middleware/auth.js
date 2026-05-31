@@ -27,7 +27,7 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
       throw new UnauthorizedError('Invalid or inactive user');
     }
 
-    req.user = { ...decoded, ...user };
+    req.user = { ...decoded, ...user, userId: user.id || decoded.userId };
     next();
   } catch {
     throw new UnauthorizedError('Invalid or expired token');

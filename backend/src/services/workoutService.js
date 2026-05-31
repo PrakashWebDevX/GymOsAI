@@ -1,27 +1,48 @@
 import { workoutRepository, profileRepository, streakRepository } from '../repositories/index.js';
 import { generateWorkoutPlan } from '../ai/geminiService.js';
-import { NotFoundError } from '../utils/errors.js';
+import { NotFoundError, AppError } from '../utils/errors.js';
 
 export class WorkoutService {
   async generateWorkout(userId, params) {
-    const profile = await profileRepository.findByUserId(userId);
+    if (!userId) {
+      throw new AppError('User not authenticated', 401);
+    }
+
+    let profile = null;
+    try {
+      profile = await profileRepository.findByUserId(userId);
+    } catch {
+      profile = null;
+    }
 
     const aiPlan = await generateWorkoutPlan({
       ...params,
       userProfile: profile,
     });
 
-    const plan = await workoutRepository.create({
-      user_id: userId,
-      title: aiPlan.title || `${params.goal} Workout`,
-      description: aiPlan.description,
-      workout_type: params.goal,
-      duration_minutes: params.duration,
-      plan_data: aiPlan,
-      is_active: true,
-    });
+    let plan;
+    try {
+      plan = await workoutRepository.create({
+        user_id: userId,
+        title: aiPlan.title || `${params.goal} Workout`,
+        description: aiPlan.description || '',
+        workout_type: params.goal,
+        duration_minutes: params.duration,
+        plan_data: aiPlan,
+        is_active: true,
+      });
+    } catch (err) {
+      throw new AppError(
+        `Failed to save workout: ${err.message}. Ensure database schema is applied in Supabase.`,
+        500
+      );
+    }
 
-    await streakRepository.updateStreak(userId, 'workout');
+    try {
+      await streakRepository.updateStreak(userId, 'workout');
+    } catch {
+      // Non-critical — workout was saved
+    }
 
     return plan;
   }

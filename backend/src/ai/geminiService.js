@@ -2,8 +2,22 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import config from '../config/index.js';
 import { AppError } from '../utils/errors.js';
 
-const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const MODEL_CANDIDATES = [
+  process.env.GEMINI_MODEL,
+  'gemini-2.0-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-1.5-flash',
+].filter(Boolean);
+
+const getGenAI = () => {
+  if (!config.gemini.apiKey) {
+    throw new AppError(
+      'Gemini API key is missing. Set GEMINI_API_KEY in backend environment variables.',
+      503
+    );
+  }
+  return new GoogleGenerativeAI(config.gemini.apiKey);
+};
 
 const parseJsonResponse = (text) => {
   const jsonMatch = text.match(/```json\n?([\s\S]*?)\n?```/) || text.match(/\{[\s\S]*\}/);
@@ -17,8 +31,41 @@ const parseJsonResponse = (text) => {
   return { raw: text };
 };
 
+const generateContent = async (prompt) => {
+  const genAI = getGenAI();
+  let lastError;
+
+  for (const modelName of MODEL_CANDIDATES) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      if (!text) throw new Error('Empty response from AI model');
+      return parseJsonResponse(text);
+    } catch (err) {
+      lastError = err;
+      const message = err.message?.toLowerCase() || '';
+      const retryable =
+        message.includes('not found') ||
+        message.includes('404') ||
+        message.includes('model') ||
+        message.includes('unsupported');
+
+      if (retryable && MODEL_CANDIDATES.indexOf(modelName) < MODEL_CANDIDATES.length - 1) {
+        continue;
+      }
+      break;
+    }
+  }
+
+  throw new AppError(
+    `AI generation failed: ${lastError?.message || 'Unknown error'}. Check GEMINI_API_KEY on Render.`,
+    502
+  );
+};
+
 export const generateWorkoutPlan = async (params) => {
-  const { goal, duration, equipment, experienceLevel, focusAreas, userProfile } = params;
+  const { goal, duration, equipment = [], experienceLevel, focusAreas = [], userProfile } = params;
 
   const prompt = `You are an expert fitness coach. Generate a detailed workout plan as JSON.
 
@@ -40,12 +87,11 @@ Return JSON with this structure:
   "difficulty": "string"
 }`;
 
-  const result = await model.generateContent(prompt);
-  return parseJsonResponse(result.response.text());
+  return generateContent(prompt);
 };
 
 export const generateNutritionPlan = async (params) => {
-  const { calories, dietType, mealsPerDay, allergies, preferences, userProfile } = params;
+  const { calories, dietType, mealsPerDay, allergies = [], preferences = [], userProfile } = params;
 
   const prompt = `You are an expert nutritionist. Generate a daily meal plan as JSON.
 
@@ -65,8 +111,7 @@ Return JSON with this structure:
   "tips": ["string"]
 }`;
 
-  const result = await model.generateContent(prompt);
-  return parseJsonResponse(result.response.text());
+  return generateContent(prompt);
 };
 
 export const analyzeBodyMetrics = async (params) => {
@@ -86,8 +131,7 @@ Return JSON with:
   "targetWeight": {"min": number, "max": number, "ideal": number}
 }`;
 
-  const result = await model.generateContent(prompt);
-  return parseJsonResponse(result.response.text());
+  return generateContent(prompt);
 };
 
 export const generateComprehensivePlan = async (params) => {
@@ -105,8 +149,7 @@ Return JSON with:
   "tips": ["string"]
 }`;
 
-  const result = await model.generateContent(prompt);
-  return parseJsonResponse(result.response.text());
+  return generateContent(prompt);
 };
 
 export const recommendFoods = async (params) => {
@@ -122,8 +165,7 @@ Return JSON with:
   "tips": ["string"]
 }`;
 
-  const result = await model.generateContent(prompt);
-  return parseJsonResponse(result.response.text());
+  return generateContent(prompt);
 };
 
 export const getSupplementAdvice = async (params) => {
@@ -140,8 +182,7 @@ Return JSON with:
   "disclaimer": "string"
 }`;
 
-  const result = await model.generateContent(prompt);
-  return parseJsonResponse(result.response.text());
+  return generateContent(prompt);
 };
 
 export const generateWeeklyReport = async (userData) => {
@@ -160,8 +201,7 @@ Return JSON with:
   "nextWeekGoals": ["string"]
 }`;
 
-  const result = await model.generateContent(prompt);
-  return parseJsonResponse(result.response.text());
+  return generateContent(prompt);
 };
 
 export default {
