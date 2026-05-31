@@ -59,6 +59,12 @@ export const useAuthStore = create(
         } catch {
           // Continue logout even if API fails
         }
+        try {
+          const { signOutSupabase } = await import('../services/supabase');
+          await signOutSupabase();
+        } catch {
+          // Continue logout
+        }
         localStorage.removeItem('gymos_token');
         set({ user: null, token: null, isAuthenticated: false });
       },

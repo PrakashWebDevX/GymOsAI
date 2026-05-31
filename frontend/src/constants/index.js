@@ -7,6 +7,7 @@ export const ROUTES = {
   HOME: '/',
   LOGIN: '/auth/login',
   REGISTER: '/auth/register',
+  AUTH_CALLBACK: '/auth/callback',
   DASHBOARD: '/dashboard',
   WORKOUT: '/workout',
   NUTRITION: '/nutrition',

@@ -7,6 +7,7 @@ import ProtectedRoute, { PublicRoute } from './ProtectedRoute';
 
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('../pages/auth/RegisterPage'));
+const AuthCallbackPage = lazy(() => import('../pages/auth/AuthCallbackPage'));
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
 const WorkoutPage = lazy(() => import('../pages/workout/WorkoutPage'));
 const NutritionPage = lazy(() => import('../pages/nutrition/NutritionPage'));
@@ -22,6 +23,8 @@ export default function AppRoutes() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
         <Route element={<AuthLayout />}>
           <Route path="/auth/login" element={<PublicRoute><LoginPage /></PublicRoute>} />

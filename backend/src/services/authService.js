@@ -54,21 +54,24 @@ export class AuthService {
   }
 
   async googleLogin({ accessToken }) {
-    const { data: authData, error: authError } = await supabaseAnon.auth.signInWithIdToken({
-      provider: 'google',
-      token: accessToken,
-    });
+    const { data: { user: supabaseUser }, error: authError } =
+      await supabaseAnon.auth.getUser(accessToken);
 
-    if (authError) throw new UnauthorizedError('Google authentication failed');
+    if (authError || !supabaseUser?.email) {
+      throw new UnauthorizedError('Google authentication failed');
+    }
 
-    let user = await userRepository.findByEmail(authData.user.email);
+    let user = await userRepository.findByEmail(supabaseUser.email);
 
     if (!user) {
       user = await userRepository.createUser({
-        id: authData.user.id,
-        email: authData.user.email,
-        full_name: authData.user.user_metadata?.full_name || authData.user.email.split('@')[0],
-        avatar_url: authData.user.user_metadata?.avatar_url,
+        id: supabaseUser.id,
+        email: supabaseUser.email,
+        full_name:
+          supabaseUser.user_metadata?.full_name ||
+          supabaseUser.user_metadata?.name ||
+          supabaseUser.email.split('@')[0],
+        avatar_url: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture,
         role: 'user',
         is_active: true,
         auth_provider: 'google',
@@ -79,6 +82,8 @@ export class AuthService {
         full_name: user.full_name,
         avatar_url: user.avatar_url,
       });
+    } else if (!user.is_active) {
+      throw new UnauthorizedError('Account is inactive');
     }
 
     const token = generateToken({ userId: user.id, email: user.email, role: user.role });
