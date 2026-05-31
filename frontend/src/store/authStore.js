@@ -60,7 +60,8 @@ export const useAuthStore = create(
           // Continue logout even if API fails
         }
         try {
-          const { signOutSupabase } = await import('../services/supabase');
+          const { signOutSupabase, AUTH_SYNC_KEY } = await import('../services/supabase');
+          sessionStorage.removeItem(AUTH_SYNC_KEY);
           await signOutSupabase();
         } catch {
           // Continue logout
