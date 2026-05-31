@@ -10,8 +10,6 @@ import achievementRoutes from './achievementRoutes.js';
 
 const router = Router();
 
-import config from '../config/index.js';
-
 router.get('/health', (_req, res) => {
   const hasGemini = Boolean(config.gemini.apiKey && config.gemini.apiKey !== 'your-gemini-api-key');
   res.json({
